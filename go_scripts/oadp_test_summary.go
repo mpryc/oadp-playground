@@ -20,12 +20,27 @@ type TestData struct {
 	RestoreEndTime   time.Time
 }
 
+func generateLogURL(originalURL string) string {
+	// Check if the original URL already points to build-log.txt
+	if strings.HasSuffix(originalURL, "/build-log.txt") {
+		return originalURL
+	}
+	parts := strings.Split(originalURL, "https://prow.ci.openshift.org/view/gs/")
+
+	re := regexp.MustCompile(`e2e-test-(.*?)/`)
+	testType := re.FindString(originalURL)
+	logURL := fmt.Sprintf("https://gcsweb-ci.apps.ci.l2s4.p1.openshiftapps.com/gcs/%s/artifacts/%se2e/build-log.txt", parts[1], testType)
+	return logURL
+}
+
 func parseLogFile(logFile string) map[string]map[int]*TestData {
 	testData := make(map[string]map[int]*TestData)
 	var scanner *bufio.Scanner
 
 	if strings.HasPrefix(logFile, "http://") || strings.HasPrefix(logFile, "https://") {
-		resp, err := http.Get(logFile)
+	  logFileURL := generateLogURL(logFile)
+    fmt.Println("Using log file", logFileURL)
+		resp, err := http.Get(logFileURL)
 		if err != nil {
 			fmt.Println("Error opening URL:", err)
 			return testData
@@ -43,7 +58,6 @@ func parseLogFile(logFile string) map[string]map[int]*TestData {
 
 		scanner = bufio.NewScanner(file)
 	}
-
 	var currentTestName string
 	currentRetryCounter := make(map[string]int)
 
