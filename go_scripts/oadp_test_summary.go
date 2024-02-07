@@ -61,8 +61,11 @@ func parseLogFile(logFile string) map[string]map[int]*TestData {
 	var currentTestName string
 	currentRetryCounter := make(map[string]int)
 
+	lineCount := 0
+
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineCount++
 
 		// Parse start of test
 		enterMatch := regexp.MustCompile(`.*Enter \[It\] (.+?) - (.+?) @`).FindStringSubmatch(line)
@@ -89,6 +92,10 @@ func parseLogFile(logFile string) map[string]map[int]*TestData {
 			parseTimestamps(line, testData[currentTestName][currentRetryCounter[currentTestName]])
 		}
 	}
+	
+	if lineCount < 100 {
+	  fmt.Printf("\nWARNING: The log file is only %d lines long, probably something wrong here with the infra\n\n", lineCount)
+  }
 
 	if err := scanner.Err(); err != nil { 
 		fmt.Println("Error reading file:", err)
