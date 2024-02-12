@@ -112,12 +112,18 @@ func main() {
 		logLocation string
 		showPassing bool
 		timeStamps  bool
+		debugMode   bool
 	)
 
 	flag.BoolVar(&timeStamps, "t", false, "whether to include timestamps in the output (shorthand)")
 	flag.BoolVar(&showPassing, "s", false, "show all tests even those passing")
+	flag.BoolVar(&debugMode, "d", false, "debug mode")
 
 	flag.Parse()
+
+	if debugMode {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	if len(flag.Args()) > 0 {
 		logLocation = demystifier.GenerateLogURL(flag.Arg(0))

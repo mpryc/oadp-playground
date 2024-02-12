@@ -117,6 +117,10 @@ func SetIndividualTestsFromLog(testRunData *TestRunData, anchorTag string) error
 		} else if matches := endRegex.FindStringSubmatch(line); matches != nil {
 			handleEndTag(line, matches, &currentAttempt)
 		} else if matches := failureRegex.FindStringSubmatch(line); matches != nil {
+			log.WithFields(log.Fields{
+				"Line":       currentAttempt.Name,
+				"Attempt no": currentAttempt.AttemptNo,
+			}).Debug("Marking attempt FAILED")
 			currentAttempt.Status = EventStatus{Status: Failed}
 		} else if currentAttempt != nil {
 			handleLogs(line, currentAttempt)
