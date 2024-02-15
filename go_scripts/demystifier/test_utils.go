@@ -15,6 +15,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// GetRunDataFromLog
+// parameters:
+// - logFile string, the location of the log file, local or remote (prefixes: http:// or https://)
+// returns:
+// - *TestRunData, a pointer to TestRunData struct representing the test run data to be updated.
 func GetRunDataFromLog(logFile string) (*TestRunData, error) {
 	var testRunData TestRunData
 
@@ -98,7 +103,7 @@ func SetIndividualTestsFromLog(testRunData *TestRunData, anchorTag string) error
 	}
 
 	if testRunData.FullLogs == "" {
-		return errors.New("Logs were not provided")
+		return errors.New("logs were not provided")
 	}
 
 	attempts := make(map[string]int)
@@ -194,13 +199,11 @@ func getOrAddTestRun(testRunsPtr **TestRunData, eventName string, shortEventName
 
 func handleEndTag(line string, matches []string, currentAttemptPtr **AttemptData) {
 	currentAttempt := *currentAttemptPtr // Dereference the pointer to get the AttemptData
-
-	log.WithFields(log.Fields{
+	if currentAttempt != nil {
+		log.WithFields(log.Fields{
 		"Line":       line,
 		"Attempt no": currentAttempt.AttemptNo,
-	}).Debug("Found end Attempt")
-
-	if currentAttempt != nil {
+		}).Debug("Found end Attempt")
 		endTime, err := parseGingkoTime(matches[2])
 		if err != nil {
 			log.Error("Error parsing end time:", err)
