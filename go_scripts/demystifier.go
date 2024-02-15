@@ -45,26 +45,26 @@ func PrintTestSummary(testData *demystifier.TestRunData) {
 	var summaries []TestSummary
 
 	// Loop through each test run to collect summary data
-	for _, testData := range testData.TestRun {
+	for i := range testData.TestRun {
 		var numAttempts, failedAttempts, numOver1Second int
 		totalRunTime := time.Duration(0)
 
-		for _, attemptData := range testData.Attempt {
+		for j := range testData.TestRun[i].Attempt {
 			// Increment the number of attempts
 			numAttempts++
 
 			// If the attempt failed, increment the failed attempts counter
-			if attemptData.Status.Status == "FAILED" {
+			if testData.TestRun[i].Attempt[j].Status.Status == "FAILED" {
 				failedAttempts++
 			}
 
 			// If the duration is greater than 1 second, increment the counter
-			if attemptData.Duration > time.Second {
+			if testData.TestRun[i].Attempt[j].Duration > time.Second {
 				numOver1Second++
 			}
 
 			// Add the duration to the total run time
-			totalRunTime += attemptData.Duration
+			totalRunTime += testData.TestRun[i].Attempt[j].Duration
 		}
 
 		// Calculate the average run time based on durations over 1 second
@@ -75,7 +75,7 @@ func PrintTestSummary(testData *demystifier.TestRunData) {
 
 		// Append the summary data to the slice
 		summaries = append(summaries, TestSummary{
-			Name:           testData.ShortName,
+			Name:           testData.TestRun[i].ShortName,
 			NumAttempts:    numAttempts,
 			NumFailed:      failedAttempts,
 			TotalRunTime:   totalRunTime,
@@ -135,21 +135,20 @@ func main() {
 
 	testData, _ := parseLogFile(logLocation)
 
-	for _, testData := range testData.TestRun {
+	for i := range testData.TestRun {
 		failedAttempts := 0 // Initialize counter for failed attempts in this test run
-
-		for _, attemptData := range testData.Attempt {
+		for j := range testData.TestRun[i].Attempt {
 			fields := log.Fields{
-				"Name": testData.ShortName,
-				"No":   attemptData.AttemptNo,
-				"Time": attemptData.Duration,
+				"Name": testData.TestRun[i].ShortName,
+				"No":   testData.TestRun[i].Attempt[j].AttemptNo,
+				"Time": testData.TestRun[i].Attempt[j].Duration,
 			}
 
 			// If the attempt failed or showPassing is true, log the attempt
-			if attemptData.Status.Status == demystifier.Failed {
+			if testData.TestRun[i].Attempt[j].Status.Status == demystifier.Failed {
 				log.WithFields(fields).Error("Failed attempt run")
 				// Increment the counter if the attempt failed
-				if attemptData.Status.Status == demystifier.Failed {
+				if testData.TestRun[i].Attempt[j].Status.Status == demystifier.Failed {
 					failedAttempts++
 				}
 			} else if showPassing {
@@ -160,7 +159,7 @@ func main() {
 		// Summary for this test run
 		if failedAttempts > 0 {
 			log.WithFields(log.Fields{
-				"Name":   testData.Name,
+				"Name":   testData.TestRun[i].Name,
 				"Failed": failedAttempts,
 			}).Info("Test Summary")
 		}
