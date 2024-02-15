@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -15,6 +15,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// GetRunDataFromLog
+// parameters:
+// - logFile string, the location of the log file, local or remote (prefixes: http:// or https://)
+// returns:
+// - *TestRunData, a pointer to TestRunData struct representing the test run data to be updated.
 func GetRunDataFromLog(logFile string) (*TestRunData, error) {
 	var testRunData TestRunData
 
@@ -30,7 +35,7 @@ func GetRunDataFromLog(logFile string) (*TestRunData, error) {
 		}
 		defer resp.Body.Close()
 
-		data, err = ioutil.ReadAll(resp.Body)
+		data, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return nil, fmt.Errorf("error reading HTTP response body: %v", err)
 		}
@@ -44,7 +49,7 @@ func GetRunDataFromLog(logFile string) (*TestRunData, error) {
 		}
 		defer file.Close()
 
-		data, err = ioutil.ReadAll(file)
+		data, err = io.ReadAll(file)
 		if err != nil {
 			return nil, fmt.Errorf("error reading file: %v", err)
 		}
@@ -98,7 +103,7 @@ func SetIndividualTestsFromLog(testRunData *TestRunData, anchorTag string) error
 	}
 
 	if testRunData.FullLogs == "" {
-		return errors.New("Logs were not provided")
+		return errors.New("logs were not provided")
 	}
 
 	attempts := make(map[string]int)
@@ -109,13 +114,12 @@ func SetIndividualTestsFromLog(testRunData *TestRunData, anchorTag string) error
 	failureRegex := regexp.MustCompile(`^[\t ]*\[FAILED\].*`)
 
 	var currentAttempt *AttemptData
-	var currentTestRun *IndividualTestRunData
 
 	for _, line := range lines {
 		if matches := startRegex.FindStringSubmatch(line); matches != nil {
-			handleStartTag(line, matches, &currentTestRun, &currentAttempt, attempts, &testRunData)
+			currentAttempt = handleStartTag(line, matches, attempts, testRunData)
 		} else if matches := endRegex.FindStringSubmatch(line); matches != nil {
-			handleEndTag(line, matches, &currentAttempt)
+			handleEndTag(line, matches, currentAttempt)
 		} else if matches := failureRegex.FindStringSubmatch(line); matches != nil {
 			log.WithFields(log.Fields{
 				"Line":       currentAttempt.Name,
@@ -130,7 +134,8 @@ func SetIndividualTestsFromLog(testRunData *TestRunData, anchorTag string) error
 	return nil
 }
 
-func handleStartTag(line string, matches []string, currentTestRunPtr **IndividualTestRunData, currentAttemptPtr **AttemptData, attempts map[string]int, testRunsPtr **TestRunData) {
+// handleStartTag add a new attempt data to a test run and returns current attempt
+func handleStartTag(line string, matches []string, attempts map[string]int, testRunsPtr *TestRunData) *AttemptData {
 	eventName := matches[2]
 	shortEventName := matches[1]
 	log.WithFields(log.Fields{
@@ -138,18 +143,16 @@ func handleStartTag(line string, matches []string, currentTestRunPtr **Individua
 		"Attempt no": attempts[eventName],
 	}).Debug("Found new Attempt")
 
-	*currentTestRunPtr = getOrAddTestRun(testRunsPtr, eventName, shortEventName)
+	currentTestRunPtr := getOrAddTestRun(testRunsPtr, eventName, shortEventName)
 
 	// Create a new instance of AttemptData
-	newAttempt := &AttemptData{
+	currentTestRunPtr.Attempt = append(currentTestRunPtr.Attempt, AttemptData{
 		AttemptNo: attempts[eventName],
 		Name:      eventName,
-	}
+	})
+	newAttempt := &currentTestRunPtr.Attempt[len(currentTestRunPtr.Attempt)-1]
 
-	*currentAttemptPtr = newAttempt
 	attempts[eventName]++
-
-	(*currentTestRunPtr).Attempt = append((*currentTestRunPtr).Attempt, newAttempt)
 
 	// Add logs to the new attempt
 	newAttempt.Logs = append(newAttempt.Logs, line)
@@ -158,49 +161,46 @@ func handleStartTag(line string, matches []string, currentTestRunPtr **Individua
 	parsedTime, err := parseGingkoTime(matches[3])
 	if err != nil {
 		log.Error("Error parsing time:", err)
-		return
+		return newAttempt
 	}
 	newAttempt.StartTime = parsedTime
 
 	log.WithFields(log.Fields{
-		"Test":         (*currentTestRunPtr).ShortName,
+		"Test":         currentTestRunPtr.ShortName,
 		"Attempt no":   newAttempt.AttemptNo,
 		"Attempt name": newAttempt.Name,
 		"Start Time":   newAttempt.StartTime,
 	}).Debug("Created New Attempt")
+	return newAttempt
 }
 
-func getOrAddTestRun(testRunsPtr **TestRunData, eventName string, shortEventName string) *IndividualTestRunData {
+func getOrAddTestRun(testRunsPtr *TestRunData, eventName string, shortEventName string) *IndividualTestRunData {
 	// Ensure that the TestRun slice is initialized
-	if (*testRunsPtr).TestRun == nil {
-		(*testRunsPtr).TestRun = []*IndividualTestRunData{}
+	if testRunsPtr.TestRun == nil {
+		testRunsPtr.TestRun = []IndividualTestRunData{}
 	}
 
 	// Iterate through existing IndividualTestRunData instances
-	for _, testRun := range (*testRunsPtr).TestRun {
-		if testRun.Name == eventName {
+	for i := range testRunsPtr.TestRun {
+		if testRunsPtr.TestRun[i].Name == eventName {
 			// If an IndividualTestRunData with the same eventName exists, return a pointer to it
-			return testRun
+			return &testRunsPtr.TestRun[i]
 		}
 	}
 
 	// If no matching IndividualTestRunData was found, create a new one
-	newTestRun := &IndividualTestRunData{Name: eventName, ShortName: shortEventName}
 	// Append it to the TestRun slice
-	(*testRunsPtr).TestRun = append((*testRunsPtr).TestRun, newTestRun)
+	testRunsPtr.TestRun = append(testRunsPtr.TestRun, IndividualTestRunData{Name: eventName, ShortName: shortEventName})
 	// Return a pointer to the newly created IndividualTestRunData
-	return newTestRun
+	return &testRunsPtr.TestRun[len(testRunsPtr.TestRun)-1]
 }
 
-func handleEndTag(line string, matches []string, currentAttemptPtr **AttemptData) {
-	currentAttempt := *currentAttemptPtr // Dereference the pointer to get the AttemptData
-
-	log.WithFields(log.Fields{
-		"Line":       line,
-		"Attempt no": currentAttempt.AttemptNo,
-	}).Debug("Found end Attempt")
-
+func handleEndTag(line string, matches []string, currentAttempt *AttemptData) {
 	if currentAttempt != nil {
+		log.WithFields(log.Fields{
+			"Line":       line,
+			"Attempt no": currentAttempt.AttemptNo,
+		}).Debug("Found end Attempt")
 		endTime, err := parseGingkoTime(matches[2])
 		if err != nil {
 			log.Error("Error parsing end time:", err)
@@ -219,11 +219,6 @@ func handleEndTag(line string, matches []string, currentAttemptPtr **AttemptData
 
 func handleLogs(line string, currentAttempt *AttemptData) {
 	currentAttempt.Logs = append(currentAttempt.Logs, line)
-}
-
-// parseDuration parses a duration string like "16.65s" into a time.Duration.
-func parseDuration(durationStr string) (time.Duration, error) {
-	return time.ParseDuration(durationStr)
 }
 
 func parseGingkoTime(timeStr string) (time.Time, error) {

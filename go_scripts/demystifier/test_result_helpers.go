@@ -42,7 +42,7 @@ type AttemptData struct {
 	Duration  time.Duration
 	Status    EventStatus // Don't yet know if it is better to be here or in the EventData
 	Logs      []string
-	Events    []*EventData
+	Events    []EventData
 }
 
 // IndividualTestRunData may consists of many attempts, each attempt
@@ -51,12 +51,12 @@ type AttemptData struct {
 type IndividualTestRunData struct {
 	Name      string
 	ShortName string
-	Attempt   []*AttemptData
+	Attempt   []AttemptData
 }
 
 // This is representation of full run, it may not have tests itself
 // but w want to store full log
 type TestRunData struct {
 	FullLogs string
-	TestRun  []*IndividualTestRunData
+	TestRun  []IndividualTestRunData
 }
