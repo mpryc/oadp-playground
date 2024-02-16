@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"sort"
 	"test_demystifier/demystifier"
 	"time"
@@ -28,6 +29,27 @@ func parseLogFile(logFile string) (*demystifier.TestRunData, error) {
 	}
 
 	return testRunDataPtr, nil
+}
+
+func DumpTestsToFolder(testData *demystifier.TestRunData, folder string) {
+	mkdirErr := os.MkdirAll(folder, 0755)
+	if mkdirErr != nil {
+		log.WithFields(log.Fields{
+			"error": mkdirErr,
+		}).Fatal("Error")
+	}
+	for i := range testData.TestRun {
+		thisRun := &testData.TestRun[i]
+		for j := range thisRun.Attempt {
+			thisAttempt := &thisRun.Attempt[j]
+			err := thisAttempt.DumpLogsToFileWithPrefixes(folder, thisAttempt.Name, ": ")
+			if err != nil {
+				log.WithFields(log.Fields{
+					"error": err,
+				}).Fatal("Error")
+			}
+		}
+	}
 }
 
 func PrintTestSummary(testData *demystifier.TestRunData) {
@@ -113,11 +135,13 @@ func main() {
 		showPassing bool
 		timeStamps  bool
 		debugMode   bool
+		dumpLogsToFolder string
 	)
 
 	flag.BoolVar(&timeStamps, "t", false, "whether to include timestamps in the output (shorthand)")
 	flag.BoolVar(&showPassing, "s", false, "show all tests even those passing")
 	flag.BoolVar(&debugMode, "d", false, "debug mode")
+	flag.StringVar(&dumpLogsToFolder, "f", "", "dump logs to folder")
 
 	flag.Parse()
 
@@ -166,7 +190,10 @@ func main() {
 			}).Info("Test Summary")
 		}
 	}
-
+	if dumpLogsToFolder != "" {
+		DumpTestsToFolder(testData, dumpLogsToFolder)
+		os.Exit(0)
+	}
 	PrintTestSummary(testData)
 
 	log.WithFields(log.Fields{
