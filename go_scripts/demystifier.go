@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"sort"
 	"test_demystifier/demystifier"
 	"time"
@@ -30,6 +31,27 @@ func parseLogFile(logFile string) (*demystifier.TestRunData, error) {
 	return testRunDataPtr, nil
 }
 
+func DumpTestsToFolder(testData *demystifier.TestRunData, folder string) {
+	mkdirErr := os.MkdirAll(folder, 0755)
+	if mkdirErr != nil {
+		log.WithFields(log.Fields{
+			"error": mkdirErr,
+		}).Fatal("Error")
+	}
+	for i := range testData.TestRun {
+		thisRun := &testData.TestRun[i]
+		for j := range thisRun.Attempt {
+			thisAttempt := &thisRun.Attempt[j]
+			err := thisAttempt.DumpLogsToFileWithPrefixes(folder, thisAttempt.Name, ": ")
+			if err != nil {
+				log.WithFields(log.Fields{
+					"error": err,
+				}).Fatal("Error")
+			}
+		}
+	}
+}
+
 func PrintTestSummary(testData *demystifier.TestRunData) {
 	// Define a struct to hold the summary data
 	type TestSummary struct {
@@ -48,23 +70,23 @@ func PrintTestSummary(testData *demystifier.TestRunData) {
 	for i := range testData.TestRun {
 		var numAttempts, failedAttempts, numOver1Second int
 		totalRunTime := time.Duration(0)
-
-		for j := range testData.TestRun[i].Attempt {
+		thisTest := &testData.TestRun[i]
+		for j := range thisTest.Attempt {
 			// Increment the number of attempts
 			numAttempts++
-
+			thisAttempt := &thisTest.Attempt[j]
 			// If the attempt failed, increment the failed attempts counter
-			if testData.TestRun[i].Attempt[j].Status.Status == "FAILED" {
+			if thisAttempt.Status.Status == "FAILED" {
 				failedAttempts++
 			}
 
 			// If the duration is greater than 1 second, increment the counter
-			if testData.TestRun[i].Attempt[j].Duration > time.Second {
+			if thisAttempt.Duration > time.Second {
 				numOver1Second++
 			}
 
 			// Add the duration to the total run time
-			totalRunTime += testData.TestRun[i].Attempt[j].Duration
+			totalRunTime += thisAttempt.Duration
 		}
 
 		// Calculate the average run time based on durations over 1 second
@@ -75,7 +97,7 @@ func PrintTestSummary(testData *demystifier.TestRunData) {
 
 		// Append the summary data to the slice
 		summaries = append(summaries, TestSummary{
-			Name:           testData.TestRun[i].ShortName,
+			Name:           thisTest.ShortName,
 			NumAttempts:    numAttempts,
 			NumFailed:      failedAttempts,
 			TotalRunTime:   totalRunTime,
@@ -113,11 +135,13 @@ func main() {
 		showPassing bool
 		timeStamps  bool
 		debugMode   bool
+		dumpLogsToFolder string
 	)
 
 	flag.BoolVar(&timeStamps, "t", false, "whether to include timestamps in the output (shorthand)")
 	flag.BoolVar(&showPassing, "s", false, "show all tests even those passing")
 	flag.BoolVar(&debugMode, "d", false, "debug mode")
+	flag.StringVar(&dumpLogsToFolder, "f", "", "dump logs to folder")
 
 	flag.Parse()
 
@@ -137,18 +161,20 @@ func main() {
 
 	for i := range testData.TestRun {
 		failedAttempts := 0 // Initialize counter for failed attempts in this test run
-		for j := range testData.TestRun[i].Attempt {
+		thisTest := &testData.TestRun[i]
+		for j := range thisTest.Attempt {
+			thisAttempt := &thisTest.Attempt[j]
 			fields := log.Fields{
-				"Name": testData.TestRun[i].ShortName,
-				"No":   testData.TestRun[i].Attempt[j].AttemptNo,
-				"Time": testData.TestRun[i].Attempt[j].Duration,
+				"Name": thisTest.ShortName,
+				"No":   thisAttempt.AttemptNo,
+				"Time": thisAttempt.Duration,
 			}
 
 			// If the attempt failed or showPassing is true, log the attempt
-			if testData.TestRun[i].Attempt[j].Status.Status == demystifier.Failed {
+			if thisAttempt.Status.Status == demystifier.Failed {
 				log.WithFields(fields).Error("Failed attempt run")
 				// Increment the counter if the attempt failed
-				if testData.TestRun[i].Attempt[j].Status.Status == demystifier.Failed {
+				if thisAttempt.Status.Status == demystifier.Failed {
 					failedAttempts++
 				}
 			} else if showPassing {
@@ -159,12 +185,15 @@ func main() {
 		// Summary for this test run
 		if failedAttempts > 0 {
 			log.WithFields(log.Fields{
-				"Name":   testData.TestRun[i].Name,
+				"Name":   thisTest.Name,
 				"Failed": failedAttempts,
 			}).Info("Test Summary")
 		}
 	}
-
+	if dumpLogsToFolder != "" {
+		DumpTestsToFolder(testData, dumpLogsToFolder)
+		os.Exit(0)
+	}
 	PrintTestSummary(testData)
 
 	log.WithFields(log.Fields{
