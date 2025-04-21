@@ -3,6 +3,21 @@
 # Based on:
 #  https://github.com/kaovilai/dotfiles/blob/master/zsh/functions/openshift/aws/create-ocp-aws.zsh
 
+# 1. Create Bastion:
+#    https://developers.redhat.com/articles/2024/04/29/how-install-single-node-openshift-aws?source=sso#create_aws_instance
+# 2. In the Bastion host install openshift-installer and openshift-client
+#   $ wget https://mirror.openshift.com/pub/openshift-v4/arm64/clients/ocp-dev-preview/4.19.0-ec.4/openshift-client-linux-4.19.0-ec.4.tar.gz
+#   $ wget https://mirror.openshift.com/pub/openshift-v4/arm64/clients/ocp-dev-preview/4.19.0-ec.4/openshift-install-linux-4.19.0-ec.4.tar.gz
+#   $ sudo mv oc kubectl openshift-install /usr/local/bin
+# 3. Log in:
+#      $ aws configure
+#      # Check if works
+#      $ aws s3 ls
+# 4. Create pull-secret.txt (download pull secret or copy-paste pull secret)
+#   -> From https://console.redhat.com/openshift/create/local 
+# 5. Run installer. e.g.
+#     $ ./create_cluster_sh.sh no-delete arm64
+
 # Usage:
 #   ./create-ocp-aws.sh [help|gather|delete|no-delete] [arm64|amd64]
 
